@@ -81,4 +81,4 @@ Open the DMG, then drag **Tuck** into **Applications**.
 
 ## Notes
 
-Tuck is currently an unsigned local build. Depending on your macOS security settings, you may need to allow it from System Settings the first time you open it.
+Tuck is ad-hoc signed for free local distribution, but it is not Apple-notarized. If macOS blocks it the first time you open it, right-click **Tuck** in Applications, choose **Open**, then confirm.
