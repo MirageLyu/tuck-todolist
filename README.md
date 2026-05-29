@@ -1,105 +1,84 @@
 # Tuck
 
-Tuck is a tiny macOS menu bar todo app for quickly capturing tasks without opening a full task manager.
+Tuck is a small macOS menu bar todo app for capturing tasks the moment they come to mind.
 
-It lives in the menu bar, keeps a compact pending list, and can use the local Claude CLI to turn natural language into structured todos. If Claude is unavailable, Tuck safely falls back to saving your original text as the todo title.
+It stays out of the way until you need it. Click the checklist icon in the menu bar, type something you want to remember, and Tuck keeps it in a compact list you can review later. It is designed for quick personal task capture rather than heavy project management.
+
+## What Tuck is for
+
+Tuck is best for small everyday reminders:
+
+- A task you do not want to forget
+- A quick note that should become a todo
+- A short list of pending things for the day
+- A lightweight place to keep tasks without opening a full productivity app
+
+The app is intentionally simple. It focuses on a clean menu bar experience, fast capture, and a calm list that does not demand attention.
 
 ## Features
 
-- Menu-bar-only macOS app
-- Fast todo capture from a compact dropdown
-- Claude-powered natural-language capture through the local `claude` CLI
-- Automatic fallback to plain todo creation when Claude is unavailable
-- Pending and completed todo sections
-- Inline completion and deletion
-- Compact editor with autosave
-- Expandable notes editor for longer notes
-- Chinese / English UI switching
-- Local JSON persistence with backup recovery
-- Minimal `.app` and `.dmg` build scripts
+- Lives in the macOS menu bar
+- Opens as a compact dropdown
+- Quickly add pending todos
+- Mark todos as complete
+- Edit title, notes, priority, and due date
+- Delete with a second confirmation click
+- View completed todos separately
+- Switch between English and Chinese
+- Stores your todos locally on your Mac
+- Optional natural-language capture when Claude Code CLI is available
 
-## Requirements
+Tuck works even if Claude is not available. In that case, it simply saves what you typed as a normal todo.
+
+## Build from source
+
+### Requirements
 
 - macOS 14 or later
-- Swift toolchain / Xcode command line tools
-- Optional: Claude Code CLI installed and logged in for AI capture
+- Xcode Command Line Tools or Xcode
+- Swift toolchain
 
-Tuck works without Claude. The **Add** / **记下** button tries Claude first, then falls back to creating a plain todo using the entered text.
-
-## Run from source
+### Clone the repository
 
 ```bash
-swift run --package-path . Tuck
+git clone https://github.com/MirageLyu/tuck-todolist.git
+cd tuck-todolist
 ```
 
-Tuck is an accessory/menu bar app, so it will not open a normal main window.
-
-## Build
+### Run from source
 
 ```bash
-swift build --package-path .
+swift run Tuck
 ```
 
-## Build the app bundle
+Tuck is a menu bar app, so it will appear in the macOS menu bar instead of opening a normal app window.
+
+### Build the app
 
 ```bash
 ./scripts/build-app.sh
 ```
 
-Output:
+The app bundle will be created at:
 
 ```text
 build/Tuck.app
 ```
 
-## Build the DMG
+### Build the DMG installer
 
 ```bash
 ./scripts/build-dmg.sh
 ```
 
-Output:
+The installer will be created at:
 
 ```text
 build/Tuck.dmg
 ```
 
-The generated app is not code-signed or notarized yet.
+Open the DMG, then drag **Tuck** into **Applications**.
 
-## Data storage
+## Notes
 
-Tuck stores data locally at:
-
-```text
-~/Library/Application Support/Tuck/todos.json
-```
-
-Before overwriting the JSON file, Tuck writes a backup:
-
-```text
-~/Library/Application Support/Tuck/todos.json.bak
-```
-
-If the main JSON file cannot be loaded, Tuck attempts to recover from the backup.
-
-Older data from the previous development name is migrated from:
-
-```text
-~/Library/Application Support/TodoAgent/todos.json
-```
-
-## Claude integration
-
-Tuck invokes Claude only from the capture button path. Other actions — editing, completing, deleting, changing language, and expanding sections — never call Claude.
-
-The app uses the local CLI in non-interactive mode. You can verify your setup with:
-
-```bash
-claude --print --output-format text --no-session-persistence 'Return exactly: OK'
-```
-
-## Development notes
-
-- The app is intentionally small and menu-bar-only.
-- There is no sync, projects, tags UI, reminders engine, signing, or notarization yet.
-- Build artifacts are ignored via `.gitignore`.
+Tuck is currently an unsigned local build. Depending on your macOS security settings, you may need to allow it from System Settings the first time you open it.

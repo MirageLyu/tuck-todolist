@@ -6,12 +6,19 @@ APP_NAME="Tuck"
 APP_DIR="$ROOT_DIR/build/$APP_NAME.app"
 CONTENTS_DIR="$APP_DIR/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
+RESOURCES_DIR="$CONTENTS_DIR/Resources"
+ICON_PATH="$ROOT_DIR/assets/Tuck.icns"
+
+if [[ ! -f "$ICON_PATH" ]]; then
+  "$ROOT_DIR/scripts/generate-assets.sh"
+fi
 
 swift build --package-path "$ROOT_DIR" -c release
 
 rm -rf "$APP_DIR"
-mkdir -p "$MACOS_DIR"
+mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
 cp "$ROOT_DIR/.build/release/$APP_NAME" "$MACOS_DIR/$APP_NAME"
+cp "$ICON_PATH" "$RESOURCES_DIR/Tuck.icns"
 chmod +x "$MACOS_DIR/$APP_NAME"
 
 cat > "$CONTENTS_DIR/Info.plist" <<'PLIST'
@@ -26,6 +33,8 @@ cat > "$CONTENTS_DIR/Info.plist" <<'PLIST'
     <key>CFBundleName</key>
     <string>Tuck</string>
     <key>CFBundleDisplayName</key>
+    <string>Tuck</string>
+    <key>CFBundleIconFile</key>
     <string>Tuck</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
