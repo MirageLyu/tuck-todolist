@@ -45,6 +45,10 @@ struct Strings {
     var expand: String { zh ? "展开" : "Expand" }
     var collapse: String { zh ? "收起" : "Collapse" }
     var editor: String { zh ? "编辑" : "Editor" }
+    var progress: String { zh ? "阶段进展" : "Progress" }
+    var progressPlaceholder: String { zh ? "记录阶段进展..." : "Record progress..." }
+    var addProgress: String { zh ? "添加进展" : "Add progress" }
+    var noProgress: String { zh ? "暂无阶段进展" : "No progress yet" }
     var quit: String { zh ? "退出" : "Quit" }
 
     func pendingSummary(_ pending: Int, completed: Int) -> String {

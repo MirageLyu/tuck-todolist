@@ -85,6 +85,26 @@ final class TodoStore: ObservableObject {
         todos[index].updatedAt = Date()
     }
 
+    func addProgress(to todo: TodoItem, content: String) {
+        let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, let index = todos.firstIndex(where: { $0.id == todo.id }) else { return }
+        todos[index].progressEntries.append(TodoProgressEntry(content: trimmed))
+        todos[index].updatedAt = Date()
+    }
+
+    func updateProgress(todo: TodoItem, entry: TodoProgressEntry, content: String) {
+        guard let todoIndex = todos.firstIndex(where: { $0.id == todo.id }),
+              let entryIndex = todos[todoIndex].progressEntries.firstIndex(where: { $0.id == entry.id }) else { return }
+        todos[todoIndex].progressEntries[entryIndex].content = content
+        todos[todoIndex].updatedAt = Date()
+    }
+
+    func deleteProgress(todo: TodoItem, entry: TodoProgressEntry) {
+        guard let todoIndex = todos.firstIndex(where: { $0.id == todo.id }) else { return }
+        todos[todoIndex].progressEntries.removeAll { $0.id == entry.id }
+        todos[todoIndex].updatedAt = Date()
+    }
+
     func deleteTodo(_ todo: TodoItem) {
         todos.removeAll { $0.id == todo.id }
         if selectedTodoID == todo.id {

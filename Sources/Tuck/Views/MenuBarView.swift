@@ -16,6 +16,8 @@ struct MenuBarView: View {
     @State private var isEditingNotes = false
     @State private var statusText = ""
     @State private var confirmingDeleteTodoID: UUID?
+    @State private var hoveredProgressTodoID: UUID?
+    @State private var newProgressContent = ""
     @FocusState private var isQuickInputFocused: Bool
 
     init(store: TodoStore, settings: AppSettings) {
@@ -43,6 +45,8 @@ struct MenuBarView: View {
         }
         .onChange(of: selectedTodoID) { _, _ in
             confirmingDeleteTodoID = nil
+            hoveredProgressTodoID = nil
+            newProgressContent = ""
             loadSelectedTodo(resetNotesExpansion: true)
         }
         .onChange(of: store.todos) { _, _ in syncSelectionAfterStoreChange() }
@@ -134,10 +138,15 @@ struct MenuBarView: View {
             .buttonStyle(.plain)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(todo.title)
-                    .font(.callout.weight(selectedTodoID == todo.id ? .semibold : .regular))
-                    .lineLimit(1)
-                    .strikethrough(todo.status == .completed)
+                HStack(spacing: 4) {
+                    Text(todo.title)
+                        .font(.callout.weight(selectedTodoID == todo.id ? .semibold : .regular))
+                        .lineLimit(1)
+                        .strikethrough(todo.status == .completed)
+                    if !todo.progressEntries.isEmpty {
+                        progressBadge(for: todo)
+                    }
+                }
                 if let dueDate = todo.dueDate {
                     Text(dueDate.formatted(date: .abbreviated, time: .shortened))
                         .font(.caption2)
@@ -159,6 +168,50 @@ struct MenuBarView: View {
         .background(cardBackground(isSelected: selectedTodoID == todo.id))
         .overlay(cardStroke)
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    private func progressBadge(for todo: TodoItem) -> some View {
+        Image(systemName: "list.bullet.clipboard")
+            .font(.caption2)
+            .foregroundStyle(.blue)
+            .popover(isPresented: progressPopoverBinding(for: todo), arrowEdge: .trailing) {
+                progressPopover(for: todo)
+                    .padding(12)
+                    .frame(width: 280)
+            }
+            .onHover { hovering in
+                if hovering {
+                    hoveredProgressTodoID = todo.id
+                    selectedTodoID = todo.id
+                    showEditor = true
+                }
+            }
+            .help(settings.strings.progress)
+    }
+
+    private func progressPopoverBinding(for todo: TodoItem) -> Binding<Bool> {
+        Binding(
+            get: { hoveredProgressTodoID == todo.id && !todo.progressEntries.isEmpty },
+            set: { isPresented in
+                if isPresented {
+                    hoveredProgressTodoID = todo.id
+                    selectedTodoID = todo.id
+                    showEditor = true
+                } else if hoveredProgressTodoID == todo.id {
+                    hoveredProgressTodoID = nil
+                }
+            }
+        )
+    }
+
+    private func progressPopover(for todo: TodoItem) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(settings.strings.progress)
+                .font(.headline)
+            ForEach(todo.progressEntries) { entry in
+                progressEditorRow(entry, for: todo)
+            }
+        }
     }
 
     @ViewBuilder
@@ -253,6 +306,8 @@ struct MenuBarView: View {
                     }
                 }
 
+                progressEditor
+
                 Text(settings.strings.updatedWithAgent)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
@@ -310,6 +365,81 @@ struct MenuBarView: View {
                 .buttonStyle(.plain)
             }
         }
+    }
+
+    private var progressEditor: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(settings.strings.progress)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Spacer()
+            }
+
+            if let todo = selectedTodo, !todo.progressEntries.isEmpty {
+                VStack(spacing: 6) {
+                    ForEach(todo.progressEntries) { entry in
+                        progressEditorRow(entry, for: todo)
+                    }
+                }
+            }
+
+            HStack(spacing: 6) {
+                TextField(settings.strings.progressPlaceholder, text: $newProgressContent)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit { addProgressToSelectedTodo() }
+                Button(settings.strings.addProgress) {
+                    addProgressToSelectedTodo()
+                }
+                .disabled(newProgressContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+    }
+
+    private func progressEditorRow(_ entry: TodoProgressEntry, for todo: TodoItem) -> some View {
+        HStack(alignment: .top, spacing: 6) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(entry.createdAt.formatted(date: .abbreviated, time: .shortened))
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                TextField(settings.strings.progress, text: progressBinding(todo: todo, entry: entry), axis: .vertical)
+                    .textFieldStyle(.roundedBorder)
+                    .lineLimit(1...3)
+            }
+            Button(role: .destructive) {
+                store.deleteProgress(todo: todo, entry: entry)
+            } label: {
+                Image(systemName: "minus.circle")
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private var selectedTodo: TodoItem? {
+        guard let selectedTodoID else { return nil }
+        return store.todos.first { $0.id == selectedTodoID }
+    }
+
+    private func progressBinding(todo: TodoItem, entry: TodoProgressEntry) -> Binding<String> {
+        Binding(
+            get: {
+                store.todos
+                    .first { $0.id == todo.id }?
+                    .progressEntries
+                    .first { $0.id == entry.id }?
+                    .content ?? entry.content
+            },
+            set: { value in
+                store.updateProgress(todo: todo, entry: entry, content: value)
+            }
+        )
+    }
+
+    private func addProgressToSelectedTodo() {
+        guard let selectedTodo else { return }
+        store.addProgress(to: selectedTodo, content: newProgressContent)
+        newProgressContent = ""
     }
 
     private func editorField<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
