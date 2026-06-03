@@ -39,9 +39,12 @@ struct Strings {
     var theme: String { zh ? "主题" : "Theme" }
     var smartCapture: String { zh ? "记下" : "Add" }
     var added: String { zh ? "已添加" : "Added" }
-    var updatedWithAgent: String { zh ? "已智能整理" : "Updated with Agent" }
+    var updated: String { zh ? "已更新" : "Updated" }
     var fallbackAdded: String { zh ? "Claude 不可用，已按普通待办添加" : "Claude unavailable; added as plain todo" }
     var notesPlaceholder: String { zh ? "添加备注..." : "Add notes..." }
+    var testClaudeCLI: String { zh ? "测试 Claude" : "Test Claude" }
+    var testingClaudeCLI: String { zh ? "正在测试 Claude..." : "Testing Claude..." }
+    var claudeCLIAvailable: String { zh ? "Claude 可用" : "Claude Available" }
     var expand: String { zh ? "展开" : "Expand" }
     var collapse: String { zh ? "收起" : "Collapse" }
     var editor: String { zh ? "编辑" : "Editor" }

@@ -1,15 +1,15 @@
 import Foundation
 
 enum ClaudeCLIError: LocalizedError {
-    case executableNotFound
+    case executableNotFound([String])
     case timedOut
     case failed(String)
     case noOutput
 
     var errorDescription: String? {
         switch self {
-        case .executableNotFound:
-            "找不到 claude 命令。请先安装并登录 Claude Code CLI。"
+        case let .executableNotFound(paths):
+            "找不到 claude 命令。请先安装并登录 Claude Code CLI。已检查：\(paths.joined(separator: ", "))"
         case .timedOut:
             "Claude CLI 响应超时。"
         case let .failed(message):
@@ -40,6 +40,36 @@ private final class ContinuationResumer<T: Sendable>: @unchecked Sendable {
     }
 }
 
+private final class PipeCollector: @unchecked Sendable {
+    let pipe = Pipe()
+    private let lock = NSLock()
+    private var data = Data()
+
+    init() {
+        pipe.fileHandleForReading.readabilityHandler = { [weak self] handle in
+            let chunk = handle.availableData
+            guard !chunk.isEmpty else { return }
+            self?.append(chunk)
+        }
+    }
+
+    func finish() -> String {
+        pipe.fileHandleForReading.readabilityHandler = nil
+        append(pipe.fileHandleForReading.readDataToEndOfFile())
+        lock.lock()
+        let data = self.data
+        lock.unlock()
+        return String(data: data, encoding: .utf8) ?? ""
+    }
+
+    private func append(_ chunk: Data) {
+        guard !chunk.isEmpty else { return }
+        lock.lock()
+        data.append(chunk)
+        lock.unlock()
+    }
+}
+
 final class ClaudeCLIClient {
     private let timeout: TimeInterval
 
@@ -49,29 +79,43 @@ final class ClaudeCLIClient {
 
     func complete(prompt: String) async throws -> String {
         let executable = try findClaudeExecutable()
-        return try await withCheckedThrowingContinuation { continuation in
+        return try await runClaude(executable: executable, arguments: [
+            "--print",
+            "--output-format", "text",
+            "--no-session-persistence",
+            prompt
+        ], requiresOutput: true)
+    }
+
+    func testAvailability() async throws {
+        let executable = try findClaudeExecutable()
+        _ = try await runClaude(executable: executable, arguments: [
+            "--print",
+            "--output-format", "text",
+            "--no-session-persistence",
+            "Reply with exactly: ok"
+        ], requiresOutput: true)
+    }
+
+    private func runClaude(executable: URL, arguments: [String], requiresOutput: Bool) async throws -> String {
+        try await withCheckedThrowingContinuation { continuation in
             let process = Process()
             process.executableURL = executable
-            process.arguments = [
-                "--print",
-                "--output-format", "text",
-                "--no-session-persistence",
-                prompt
-            ]
+            process.arguments = arguments
 
-            let outputPipe = Pipe()
-            let errorPipe = Pipe()
-            process.standardOutput = outputPipe
-            process.standardError = errorPipe
+            let outputCollector = PipeCollector()
+            let errorCollector = PipeCollector()
+            process.standardOutput = outputCollector.pipe
+            process.standardError = errorCollector.pipe
 
             let resumer = ContinuationResumer(continuation: continuation)
 
             process.terminationHandler = { finishedProcess in
-                let output = String(data: outputPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-                let stderr = String(data: errorPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+                let output = outputCollector.finish()
+                let stderr = errorCollector.finish()
                 if finishedProcess.terminationStatus == 0 {
                     let trimmed = output.trimmingCharacters(in: .whitespacesAndNewlines)
-                    trimmed.isEmpty ? resumer.resume(.failure(ClaudeCLIError.noOutput)) : resumer.resume(.success(trimmed))
+                    requiresOutput && trimmed.isEmpty ? resumer.resume(.failure(ClaudeCLIError.noOutput)) : resumer.resume(.success(trimmed))
                 } else {
                     let message = stderr.trimmingCharacters(in: .whitespacesAndNewlines)
                     resumer.resume(.failure(ClaudeCLIError.failed(message.isEmpty ? "Claude CLI exited with status \(finishedProcess.terminationStatus)." : message)))
@@ -94,7 +138,10 @@ final class ClaudeCLIClient {
     }
 
     private func findClaudeExecutable() throws -> URL {
+        let homeDirectory = FileManager.default.homeDirectoryForCurrentUser.path
         let candidates = [
+            "\(homeDirectory)/.local/bin/claude",
+            "\(homeDirectory)/bin/claude",
             "/opt/homebrew/bin/claude",
             "/usr/local/bin/claude",
             "/usr/bin/claude"
@@ -113,11 +160,11 @@ final class ClaudeCLIClient {
         try? process.run()
         process.waitUntilExit()
 
-        guard process.terminationStatus == 0 else { throw ClaudeCLIError.executableNotFound }
+        guard process.terminationStatus == 0 else { throw ClaudeCLIError.executableNotFound(candidates) }
         let path = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         guard !path.isEmpty, FileManager.default.isExecutableFile(atPath: path) else {
-            throw ClaudeCLIError.executableNotFound
+            throw ClaudeCLIError.executableNotFound(candidates)
         }
         return URL(fileURLWithPath: path)
     }

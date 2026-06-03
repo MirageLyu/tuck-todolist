@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 struct MenuBarView: View {
     @ObservedObject var store: TodoStore
@@ -18,6 +19,9 @@ struct MenuBarView: View {
     @State private var confirmingDeleteTodoID: UUID?
     @State private var hoveredProgressTodoID: UUID?
     @State private var newProgressContent = ""
+    @State private var cliTestState = CLITestState.untested
+    @State private var isCLITestHovering = false
+    @State private var showCLITestTooltip = false
     @FocusState private var isQuickInputFocused: Bool
 
     init(store: TodoStore, settings: AppSettings) {
@@ -26,17 +30,29 @@ struct MenuBarView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 9) {
-            header
-            quickCapture
-            todoList
-            editorSection
-            completedSection
-            footer
+        ZStack(alignment: .topTrailing) {
+            VStack(alignment: .leading, spacing: 9) {
+                header
+                quickCapture
+                todoList
+                editorSection
+                completedSection
+                footer
+            }
+            .padding(14)
+            .frame(width: 372)
+            .background(.regularMaterial)
+
+            if showCLITestTooltip {
+                fastTooltip(cliTestTooltip, wraps: cliTestState.isUnavailable)
+                    .padding(.top, 41)
+                    .padding(.trailing, 54)
+                    .transition(.opacity.combined(with: .scale(scale: 0.97)))
+                    .allowsHitTesting(false)
+                    .zIndex(100)
+            }
         }
-        .padding(14)
         .frame(width: 372)
-        .background(.regularMaterial)
         .onAppear {
             selectInitialTodo()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
@@ -68,6 +84,32 @@ struct MenuBarView: View {
                 .background(Color.accentColor.opacity(0.16))
                 .clipShape(Capsule())
             Spacer()
+            Button {
+                Task { await testClaudeCLIAvailability() }
+            } label: {
+                ClaudeCLIIcon(state: cliTestState)
+                    .frame(width: 25, height: 20)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(cliTestState.isTesting)
+            .zIndex(1)
+            .onHover { hovering in
+                isCLITestHovering = hovering
+                if hovering {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                        guard isCLITestHovering else { return }
+                        withAnimation(.easeOut(duration: 0.12)) {
+                            showCLITestTooltip = true
+                        }
+                    }
+                } else {
+                    withAnimation(.easeOut(duration: 0.08)) {
+                        showCLITestTooltip = false
+                    }
+                }
+            }
+            .accessibilityHint(cliTestTooltip)
             Button { settings.cycleLanguage() } label: {
                 Label(settings.language.shortLabel, systemImage: "globe")
                     .labelStyle(.titleAndIcon)
@@ -130,7 +172,7 @@ struct MenuBarView: View {
         HStack(spacing: 8) {
             Button {
                 store.setCompleted(todo, completed: todo.status != .completed)
-                statusText = settings.strings.updatedWithAgent
+                statusText = settings.strings.updated
             } label: {
                 Image(systemName: todo.status == .completed ? "checkmark.circle.fill" : "circle")
                     .foregroundStyle(todo.status == .completed ? .green : .secondary)
@@ -257,6 +299,33 @@ struct MenuBarView: View {
             .stroke(Color.primary.opacity(0.06), lineWidth: 1)
     }
 
+    private var cliTestTooltip: String {
+        switch cliTestState {
+        case .untested:
+            settings.strings.testClaudeCLI
+        case .testing:
+            settings.strings.testingClaudeCLI
+        case .available:
+            settings.strings.claudeCLIAvailable
+        case let .unavailable(message):
+            message
+        }
+    }
+
+    private func fastTooltip(_ text: String, wraps: Bool = false) -> some View {
+        Text(text)
+            .font(.caption2)
+            .foregroundStyle(.primary)
+            .lineLimit(wraps ? 4 : 1)
+            .fixedSize(horizontal: !wraps, vertical: true)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 4)
+            .frame(maxWidth: wraps ? 280 : nil, alignment: .leading)
+            .background(Color(nsColor: .windowBackgroundColor))
+            .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+            .shadow(color: .black.opacity(0.10), radius: 5, y: 2)
+    }
+
     private var editorSection: some View {
         DisclosureGroup(isExpanded: $showEditor) {
             miniEditor
@@ -307,11 +376,6 @@ struct MenuBarView: View {
                 }
 
                 progressEditor
-
-                Text(settings.strings.updatedWithAgent)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding(12)
             .background(.ultraThinMaterial)
@@ -497,7 +561,7 @@ struct MenuBarView: View {
                 store.addMessage(role: .user, text: text)
                 store.apply(response.actions)
                 store.addMessage(role: .assistant, text: response.reply)
-                statusText = settings.strings.updatedWithAgent
+                statusText = settings.strings.updated
                 selectedTodoID = store.selectedTodoID ?? store.pendingTodos.first?.id
                 loadSelectedTodo(resetNotesExpansion: true)
             }
@@ -512,6 +576,17 @@ struct MenuBarView: View {
         selectedTodoID = store.selectedTodoID
         loadSelectedTodo(resetNotesExpansion: true)
         statusText = settings.strings.added
+    }
+
+    private func testClaudeCLIAvailability() async {
+        cliTestState = .testing
+        do {
+            try await agent.testClaudeCLIAvailability()
+            cliTestState = .available
+        } catch {
+            let message = error.localizedDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+            cliTestState = .unavailable(message.isEmpty ? String(describing: error) : message)
+        }
     }
 
     private func selectInitialTodo() {
@@ -567,5 +642,126 @@ struct MenuBarView: View {
         self.selectedTodoID = store.pendingTodos.first?.id ?? store.completedTodos.first?.id
         loadSelectedTodo(resetNotesExpansion: true)
         statusText = settings.strings.delete
+    }
+}
+
+private struct ClaudeCLIIcon: View {
+    let state: CLITestState
+
+    var body: some View {
+        ZStack(alignment: .bottomTrailing) {
+            claudeIcon
+                .frame(width: 19, height: 19)
+                .opacity(state.isTesting ? 0.55 : 1)
+
+            if state.showsStatusBadge {
+                statusGlyph
+                    .font(.system(size: 7, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 10, height: 10)
+                    .background(Circle().fill(state.statusGlyphColor))
+                    .overlay(Circle().stroke(.background.opacity(0.95), lineWidth: 1.3))
+                    .offset(x: 1, y: 1)
+            }
+        }
+        .frame(width: 25, height: 20)
+    }
+
+    @ViewBuilder
+    private var claudeIcon: some View {
+        if let image = Self.claudeTemplateImage {
+            Image(nsImage: image)
+                .resizable()
+                .renderingMode(.template)
+                .foregroundStyle(.primary)
+        } else {
+            ClaudeMark()
+                .fill(Color.primary)
+                .padding(2)
+        }
+    }
+
+    private static let claudeTemplateImage: NSImage? = {
+        let path = "/Applications/Claude.app/Contents/Resources/TrayIconTemplate.png"
+        guard let image = NSImage(contentsOfFile: path) else { return nil }
+        image.isTemplate = true
+        return image
+    }()
+
+    @ViewBuilder
+    private var statusGlyph: some View {
+        switch state {
+        case .untested:
+            EmptyView()
+        case .testing:
+            ProgressView()
+                .controlSize(.mini)
+                .scaleEffect(0.42)
+        case .available:
+            Image(systemName: "checkmark")
+        case .unavailable:
+            Image(systemName: "xmark")
+        }
+    }
+}
+
+private struct ClaudeMark: Shape {
+    func path(in rect: CGRect) -> Path {
+        let s = min(rect.width, rect.height)
+        let x = rect.midX
+        let y = rect.midY
+        let r = s / 2
+        var path = Path()
+
+        path.move(to: CGPoint(x: x, y: y - r * 0.92))
+        path.addLine(to: CGPoint(x: x + r * 0.26, y: y - r * 0.22))
+        path.addLine(to: CGPoint(x: x + r * 0.92, y: y - r * 0.22))
+        path.addLine(to: CGPoint(x: x + r * 0.38, y: y + r * 0.16))
+        path.addLine(to: CGPoint(x: x + r * 0.60, y: y + r * 0.86))
+        path.addLine(to: CGPoint(x: x, y: y + r * 0.42))
+        path.addLine(to: CGPoint(x: x - r * 0.60, y: y + r * 0.86))
+        path.addLine(to: CGPoint(x: x - r * 0.38, y: y + r * 0.16))
+        path.addLine(to: CGPoint(x: x - r * 0.92, y: y - r * 0.22))
+        path.addLine(to: CGPoint(x: x - r * 0.26, y: y - r * 0.22))
+        path.closeSubpath()
+
+        return path
+    }
+}
+
+private enum CLITestState {
+    case untested
+    case testing
+    case available
+    case unavailable(String)
+
+    var statusGlyphColor: Color {
+        switch self {
+        case .untested, .testing:
+            .secondary
+        case .available:
+            .green
+        case .unavailable:
+            .red
+        }
+    }
+
+    var showsStatusBadge: Bool {
+        switch self {
+        case .untested:
+            false
+        case .testing, .available, .unavailable:
+            true
+        }
+    }
+
+    var isTesting: Bool {
+        if case .testing = self { return true }
+        return false
+    }
+
+    var isUnavailable: Bool {
+        if case .unavailable = self { return true }
+        return false
     }
 }
