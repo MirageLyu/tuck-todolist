@@ -1,10 +1,12 @@
 import Foundation
+import Darwin
 
 enum ClaudeCLIError: LocalizedError {
     case executableNotFound([String])
     case timedOut
     case failed(String)
     case noOutput
+    case unexpectedAvailabilityResponse(String)
 
     var errorDescription: String? {
         switch self {
@@ -16,6 +18,8 @@ enum ClaudeCLIError: LocalizedError {
             message
         case .noOutput:
             "Claude CLI 没有返回内容。"
+        case let .unexpectedAvailabilityResponse(output):
+            "Claude CLI 返回了非预期内容：\(output)"
         }
     }
 }
@@ -89,12 +93,15 @@ final class ClaudeCLIClient {
 
     func testAvailability() async throws {
         let executable = try findClaudeExecutable()
-        _ = try await runClaude(executable: executable, arguments: [
+        let output = try await runClaude(executable: executable, arguments: [
             "--print",
             "--output-format", "text",
             "--no-session-persistence",
             "Reply with exactly: ok"
         ], requiresOutput: true)
+        guard ClaudeCLIClient.isExpectedAvailabilityResponse(output) else {
+            throw ClaudeCLIError.unexpectedAvailabilityResponse(ClaudeCLIClient.displaySnippet(output))
+        }
     }
 
     private func runClaude(executable: URL, arguments: [String], requiresOutput: Bool) async throws -> String {
@@ -132,9 +139,29 @@ final class ClaudeCLIClient {
             DispatchQueue.global().asyncAfter(deadline: .now() + timeout) {
                 guard process.isRunning else { return }
                 process.terminate()
+                DispatchQueue.global().asyncAfter(deadline: .now() + 1) {
+                    guard process.isRunning else { return }
+                    kill(process.processIdentifier, SIGKILL)
+                }
                 resumer.resume(.failure(ClaudeCLIError.timedOut))
             }
         }
+    }
+
+    static func isExpectedAvailabilityResponse(_ output: String) -> Bool {
+        output
+            .split(whereSeparator: \.isNewline)
+            .contains { line in
+                let normalized = line.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                return normalized == "ok" || normalized == "ok."
+            }
+    }
+
+    static func displaySnippet(_ output: String, limit: Int = 400) -> String {
+        let trimmed = output.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.count > limit else { return trimmed }
+        let end = trimmed.index(trimmed.startIndex, offsetBy: limit)
+        return String(trimmed[..<end]) + "…"
     }
 
     private func findClaudeExecutable() throws -> URL {

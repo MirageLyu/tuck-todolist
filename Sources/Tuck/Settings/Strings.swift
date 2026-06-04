@@ -45,6 +45,13 @@ struct Strings {
     var testClaudeCLI: String { zh ? "测试 Claude" : "Test Claude" }
     var testingClaudeCLI: String { zh ? "正在测试 Claude..." : "Testing Claude..." }
     var claudeCLIAvailable: String { zh ? "Claude 可用" : "Claude Available" }
+    var claudeCLINotFound: String { zh ? "找不到 claude 命令。请先安装并登录 Claude Code CLI。" : "Could not find the claude command. Install and log in to Claude Code CLI first." }
+    var claudeCLICheckedPaths: String { zh ? "已检查" : "Checked" }
+    var claudeCLITimedOut: String { zh ? "Claude CLI 响应超时。" : "Claude CLI timed out." }
+    var claudeCLINoOutput: String { zh ? "Claude CLI 没有返回内容。" : "Claude CLI returned no output." }
+    var claudeCLIUnexpectedResponse: String { zh ? "Claude CLI 返回了非预期内容" : "Claude CLI returned an unexpected response" }
+    var copyError: String { zh ? "复制错误" : "Copy Error" }
+    var errorCopied: String { zh ? "已复制错误" : "Error Copied" }
     var expand: String { zh ? "展开" : "Expand" }
     var collapse: String { zh ? "收起" : "Collapse" }
     var editor: String { zh ? "编辑" : "Editor" }
@@ -61,8 +68,24 @@ struct Strings {
         return "\(pending) \(self.pending)" + (completed > 0 ? " · \(completed) \(self.completed)" : "")
     }
 
-    func agentError(_ message: String) -> String {
-        zh ? "Agent 出错：\(message)" : "Agent error: \(message)"
+    func claudeCLIError(_ error: Error) -> String {
+        guard let cliError = error as? ClaudeCLIError else {
+            let message = error.localizedDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+            return message.isEmpty ? String(describing: error) : message
+        }
+
+        switch cliError {
+        case let .executableNotFound(paths):
+            return "\(claudeCLINotFound) \(claudeCLICheckedPaths): \(paths.joined(separator: ", "))"
+        case .timedOut:
+            return claudeCLITimedOut
+        case let .failed(message):
+            return message
+        case .noOutput:
+            return claudeCLINoOutput
+        case let .unexpectedAvailabilityResponse(output):
+            return "\(claudeCLIUnexpectedResponse): \(output)"
+        }
     }
 
     func tidyPrompt() -> String {
