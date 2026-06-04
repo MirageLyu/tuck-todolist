@@ -22,6 +22,7 @@ struct MenuBarView: View {
     @State private var cliTestState = CLITestState.untested
     @State private var isCLITestHovering = false
     @State private var showCLITestTooltip = false
+    @State private var isCLITestTooltipHovering = false
     @FocusState private var isQuickInputFocused: Bool
 
     init(store: TodoStore, settings: AppSettings) {
@@ -44,11 +45,16 @@ struct MenuBarView: View {
             .background(.regularMaterial)
 
             if showCLITestTooltip {
-                fastTooltip(cliTestTooltip, wraps: cliTestState.isUnavailable)
+                cliTestTooltipView
                     .padding(.top, 41)
                     .padding(.trailing, 54)
                     .transition(.opacity.combined(with: .scale(scale: 0.97)))
-                    .allowsHitTesting(false)
+                    .onHover { hovering in
+                        isCLITestTooltipHovering = hovering
+                        if !hovering {
+                            hideCLITestTooltipIfNeeded()
+                        }
+                    }
                     .zIndex(100)
             }
         }
@@ -99,14 +105,10 @@ struct MenuBarView: View {
                 if hovering {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
                         guard isCLITestHovering else { return }
-                        withAnimation(.easeOut(duration: 0.12)) {
-                            showCLITestTooltip = true
-                        }
+                        showCLITestTooltipWithAnimation()
                     }
                 } else {
-                    withAnimation(.easeOut(duration: 0.08)) {
-                        showCLITestTooltip = false
-                    }
+                    hideCLITestTooltipIfNeeded()
                 }
             }
             .accessibilityHint(cliTestTooltip)
@@ -299,6 +301,21 @@ struct MenuBarView: View {
             .stroke(Color.primary.opacity(0.06), lineWidth: 1)
     }
 
+    private func showCLITestTooltipWithAnimation() {
+        withAnimation(.easeOut(duration: 0.12)) {
+            showCLITestTooltip = true
+        }
+    }
+
+    private func hideCLITestTooltipIfNeeded() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+            guard !isCLITestHovering, !isCLITestTooltipHovering else { return }
+            withAnimation(.easeOut(duration: 0.08)) {
+                showCLITestTooltip = false
+            }
+        }
+    }
+
     private var cliTestTooltip: String {
         switch cliTestState {
         case .untested:
@@ -312,18 +329,48 @@ struct MenuBarView: View {
         }
     }
 
+    @ViewBuilder
+    private var cliTestTooltipView: some View {
+        if case let .unavailable(message) = cliTestState {
+            VStack(alignment: .leading, spacing: 6) {
+                fastTooltipText(message, wraps: true)
+                Button(settings.strings.copyError) {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(message, forType: .string)
+                    statusText = settings.strings.errorCopied
+                }
+                .font(.caption2.weight(.semibold))
+                .buttonStyle(.borderless)
+            }
+            .padding(.horizontal, 7)
+            .padding(.vertical, 5)
+            .frame(maxWidth: 280, alignment: .leading)
+            .background(Color(nsColor: .windowBackgroundColor))
+            .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+            .shadow(color: .black.opacity(0.10), radius: 5, y: 2)
+        } else {
+            fastTooltip(cliTestTooltip)
+                .allowsHitTesting(false)
+        }
+    }
+
     private func fastTooltip(_ text: String, wraps: Bool = false) -> some View {
-        Text(text)
-            .font(.caption2)
-            .foregroundStyle(.primary)
-            .lineLimit(wraps ? 4 : 1)
-            .fixedSize(horizontal: !wraps, vertical: true)
+        fastTooltipText(text, wraps: wraps)
             .padding(.horizontal, 7)
             .padding(.vertical, 4)
             .frame(maxWidth: wraps ? 280 : nil, alignment: .leading)
             .background(Color(nsColor: .windowBackgroundColor))
             .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
             .shadow(color: .black.opacity(0.10), radius: 5, y: 2)
+    }
+
+    private func fastTooltipText(_ text: String, wraps: Bool = false) -> some View {
+        Text(text)
+            .font(.caption2)
+            .foregroundStyle(.primary)
+            .lineLimit(wraps ? 6 : 1)
+            .fixedSize(horizontal: !wraps, vertical: true)
+            .textSelection(.enabled)
     }
 
     private var editorSection: some View {
@@ -578,14 +625,14 @@ struct MenuBarView: View {
         statusText = settings.strings.added
     }
 
+    @MainActor
     private func testClaudeCLIAvailability() async {
         cliTestState = .testing
         do {
             try await agent.testClaudeCLIAvailability()
             cliTestState = .available
         } catch {
-            let message = error.localizedDescription.trimmingCharacters(in: .whitespacesAndNewlines)
-            cliTestState = .unavailable(message.isEmpty ? String(describing: error) : message)
+            cliTestState = .unavailable(settings.strings.claudeCLIError(error))
         }
     }
 
