@@ -28,6 +28,10 @@ final class TodoAgent {
         return try decodeResponse(from: output)
     }
 
+    func testClaudeCLIAvailability() async throws {
+        try await client.testAvailability()
+    }
+
     private func buildPrompt(mode: AgentMode, userText: String, todos: [TodoItem]) throws -> String {
         let snapshot = AgentRequest(
             mode: mode.rawValue,
