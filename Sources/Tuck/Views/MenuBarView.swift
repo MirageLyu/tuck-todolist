@@ -23,6 +23,7 @@ struct MenuBarView: View {
     @State private var isCLITestHovering = false
     @State private var showCLITestTooltip = false
     @State private var isCLITestTooltipHovering = false
+    @State private var shouldRestoreQuickInputFocusAfterCLITooltip = false
     @FocusState private var isQuickInputFocused: Bool
 
     init(store: TodoStore, settings: AppSettings) {
@@ -50,11 +51,13 @@ struct MenuBarView: View {
                     .padding(.trailing, 54)
                     .transition(.opacity.combined(with: .scale(scale: 0.97)))
                     .onHover { hovering in
+                        guard cliTestTooltipPresentation.allowsHitTesting else { return }
                         isCLITestTooltipHovering = hovering
                         if !hovering {
                             hideCLITestTooltipIfNeeded()
                         }
                     }
+                    .allowsHitTesting(cliTestTooltipPresentation.allowsHitTesting)
                     .zIndex(100)
             }
         }
@@ -302,6 +305,10 @@ struct MenuBarView: View {
     }
 
     private func showCLITestTooltipWithAnimation() {
+        if cliTestTooltipPresentation.suppressesQuickCaptureFocusRing, isQuickInputFocused {
+            shouldRestoreQuickInputFocusAfterCLITooltip = true
+            isQuickInputFocused = false
+        }
         withAnimation(.easeOut(duration: 0.12)) {
             showCLITestTooltip = true
         }
@@ -313,6 +320,15 @@ struct MenuBarView: View {
             withAnimation(.easeOut(duration: 0.08)) {
                 showCLITestTooltip = false
             }
+            restoreQuickInputFocusAfterCLITooltipIfNeeded()
+        }
+    }
+
+    private func restoreQuickInputFocusAfterCLITooltipIfNeeded() {
+        guard shouldRestoreQuickInputFocusAfterCLITooltip else { return }
+        shouldRestoreQuickInputFocusAfterCLITooltip = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            isQuickInputFocused = true
         }
     }
 
@@ -327,6 +343,10 @@ struct MenuBarView: View {
         case let .unavailable(message):
             message
         }
+    }
+
+    private var cliTestTooltipPresentation: CLITestTooltipPresentation {
+        CLITestTooltipPresentation(state: cliTestState)
     }
 
     @ViewBuilder
@@ -345,7 +365,7 @@ struct MenuBarView: View {
             .padding(.horizontal, 7)
             .padding(.vertical, 5)
             .frame(maxWidth: 280, alignment: .leading)
-            .background(Color(nsColor: .windowBackgroundColor))
+            .background(Color(nsColor: .windowBackgroundColor).opacity(cliTestTooltipPresentation.backgroundAlpha))
             .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
             .shadow(color: .black.opacity(0.10), radius: 5, y: 2)
         } else {
@@ -359,7 +379,7 @@ struct MenuBarView: View {
             .padding(.horizontal, 7)
             .padding(.vertical, 4)
             .frame(maxWidth: wraps ? 280 : nil, alignment: .leading)
-            .background(Color(nsColor: .windowBackgroundColor))
+            .background(Color(nsColor: .windowBackgroundColor).opacity(cliTestTooltipPresentation.backgroundAlpha))
             .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
             .shadow(color: .black.opacity(0.10), radius: 5, y: 2)
     }
@@ -776,7 +796,19 @@ private struct ClaudeMark: Shape {
     }
 }
 
-private enum CLITestState {
+struct CLITestTooltipPresentation {
+    let allowsHitTesting: Bool
+    let backgroundAlpha: Double
+    let suppressesQuickCaptureFocusRing: Bool
+
+    init(state: CLITestState) {
+        self.allowsHitTesting = state.isUnavailable
+        self.backgroundAlpha = 1.0
+        self.suppressesQuickCaptureFocusRing = true
+    }
+}
+
+enum CLITestState {
     case untested
     case testing
     case available
