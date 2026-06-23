@@ -2,6 +2,7 @@ import Foundation
 
 struct AgentResponse: Codable {
     var reply: String
+    var statusSummary: String?
     var actions: [AgentAction]
     var dailySummary: String?
 }

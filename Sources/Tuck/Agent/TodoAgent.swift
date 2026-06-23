@@ -32,7 +32,7 @@ final class TodoAgent {
         try await client.testAvailability()
     }
 
-    private func buildPrompt(mode: AgentMode, userText: String, todos: [TodoItem]) throws -> String {
+    internal func buildPrompt(mode: AgentMode, userText: String, todos: [TodoItem]) throws -> String {
         let snapshot = AgentRequest(
             mode: mode.rawValue,
             now: ISO8601DateFormatter().string(from: Date()),
@@ -49,17 +49,21 @@ final class TodoAgent {
 
         Rules:
         - Return JSON only. No markdown fences, no prose outside JSON.
-        - Preserve the user's language in titles and replies.
+        - Preserve the user's language in titles, replies, and statusSummary.
         - Create todos when the user mentions an actionable thing to remember.
         - Use existing todo IDs for update/complete/delete actions.
         - If the user is only chatting, return an empty actions array.
         - For dueDate, use ISO-8601 dates with timezone when you can infer one; otherwise null.
         - priority must be one of: low, normal, high.
         - Never invent deleted or completed items unless the user clearly asked.
+        - statusSummary is a short user-facing progress/result summary, not hidden reasoning.
+        - Do not include chain-of-thought, private reasoning, or step-by-step analysis.
+        - Keep statusSummary concise: about 60 English characters or 20 Chinese characters when possible.
 
         Response schema:
         {
           "reply": "short user-facing response",
+          "statusSummary": "short user-facing progress/result summary or null",
           "actions": [
             {
               "type": "createTodo|updateTodo|completeTodo|deleteTodo",
