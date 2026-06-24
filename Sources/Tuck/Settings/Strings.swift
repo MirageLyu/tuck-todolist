@@ -38,6 +38,8 @@ struct Strings {
     var languageLabel: String { zh ? "语言" : "Language" }
     var theme: String { zh ? "主题" : "Theme" }
     var smartCapture: String { zh ? "记下" : "Add" }
+    var captureThinking: String { zh ? "思考中…" : "Thinking…" }
+    var captureThinkingStatus: String { zh ? "Claude 正在整理这条待办…" : "Claude is organizing this todo…" }
     var added: String { zh ? "已添加" : "Added" }
     var updated: String { zh ? "已更新" : "Updated" }
     var fallbackAdded: String { zh ? "Claude 不可用，已按普通待办添加" : "Claude unavailable; added as plain todo" }
