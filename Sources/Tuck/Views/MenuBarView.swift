@@ -124,7 +124,9 @@ struct MenuBarView: View {
     }
 
     private var quickCapture: some View {
-        VStack(spacing: 7) {
+        let presentation = QuickCapturePresentation(isWorking: store.isAgentWorking, strings: settings.strings)
+
+        return VStack(spacing: 7) {
             HStack(spacing: 8) {
                 TextField(settings.strings.quickCapture, text: $quickInput)
                     .textFieldStyle(.roundedBorder)
@@ -133,7 +135,14 @@ struct MenuBarView: View {
                 Button {
                     Task { await smartCapture() }
                 } label: {
-                    Label(settings.strings.smartCapture, systemImage: "sparkles")
+                    HStack(spacing: 5) {
+                        if presentation.showsProgress {
+                            ProgressView()
+                                .controlSize(.mini)
+                                .scaleEffect(0.55)
+                        }
+                        Label(presentation.buttonTitle, systemImage: presentation.systemImage)
+                    }
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(quickInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || store.isAgentWorking)
@@ -617,6 +626,7 @@ struct MenuBarView: View {
         let text = quickInput.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, !store.isAgentWorking else { return }
         quickInput = ""
+        statusText = settings.strings.captureThinkingStatus
         store.isAgentWorking = true
         defer { store.isAgentWorking = false }
 
@@ -628,7 +638,7 @@ struct MenuBarView: View {
                 store.addMessage(role: .user, text: text)
                 store.apply(response.actions)
                 store.addMessage(role: .assistant, text: response.reply)
-                statusText = settings.strings.updated
+                statusText = CaptureStatusSummary.preferred(summary: response.statusSummary, fallback: settings.strings.updated)
                 selectedTodoID = store.selectedTodoID ?? store.pendingTodos.first?.id
                 loadSelectedTodo(resetNotesExpansion: true)
             }
@@ -793,6 +803,25 @@ private struct ClaudeMark: Shape {
         path.closeSubpath()
 
         return path
+    }
+}
+
+struct QuickCapturePresentation {
+    let buttonTitle: String
+    let systemImage: String
+    let showsProgress: Bool
+
+    init(isWorking: Bool, strings: Strings) {
+        self.buttonTitle = isWorking ? strings.captureThinking : strings.smartCapture
+        self.systemImage = "sparkles"
+        self.showsProgress = isWorking
+    }
+}
+
+struct CaptureStatusSummary {
+    static func preferred(summary: String?, fallback: String) -> String {
+        let trimmed = summary?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? fallback : trimmed
     }
 }
 
