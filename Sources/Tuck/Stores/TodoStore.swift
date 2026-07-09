@@ -18,10 +18,14 @@ final class TodoStore: ObservableObject {
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
 
-    init() {
-        let applicationSupportURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        let supportURL = applicationSupportURL.appendingPathComponent("Tuck", isDirectory: true)
-        self.fileURL = supportURL.appendingPathComponent("todos.json")
+    init(dataDirectory: URL? = nil) {
+        if let dir = dataDirectory {
+            self.fileURL = dir.appendingPathComponent("todos.json")
+        } else {
+            let applicationSupportURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            let supportURL = applicationSupportURL.appendingPathComponent("Tuck", isDirectory: true)
+            self.fileURL = supportURL.appendingPathComponent("todos.json")
+        }
 
         self.encoder = JSONEncoder()
         self.encoder.outputFormatting = [.prettyPrinted, .sortedKeys]

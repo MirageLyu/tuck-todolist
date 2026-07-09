@@ -86,12 +86,14 @@ struct MenuBarView: View {
         HStack(spacing: 8) {
             Label(settings.strings.appTitle, systemImage: "checklist")
                 .font(.headline)
+                .accessibilityIdentifier("header.title")
             Text("\(store.pendingTodos.count)")
                 .font(.caption.weight(.bold))
                 .padding(.horizontal, 7)
                 .padding(.vertical, 3)
                 .background(Color.accentColor.opacity(0.16))
                 .clipShape(Capsule())
+                .accessibilityIdentifier("header.todoCount")
             Spacer()
             Button {
                 Task { await testClaudeCLIAvailability() }
@@ -115,11 +117,13 @@ struct MenuBarView: View {
                 }
             }
             .accessibilityHint(cliTestTooltip)
+            .accessibilityIdentifier("header.claudeTestButton")
             Button { settings.cycleLanguage() } label: {
                 Label(settings.language.shortLabel, systemImage: "globe")
                     .labelStyle(.titleAndIcon)
             }
             .help(settings.strings.languageLabel)
+            .accessibilityIdentifier("header.languageButton")
         }
     }
 
@@ -132,6 +136,7 @@ struct MenuBarView: View {
                     .textFieldStyle(.roundedBorder)
                     .focused($isQuickInputFocused)
                     .onSubmit { Task { await smartCapture() } }
+                    .accessibilityIdentifier("quickCapture.textField")
                 Button {
                     Task { await smartCapture() }
                 } label: {
@@ -146,12 +151,14 @@ struct MenuBarView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(quickInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || store.isAgentWorking)
+                .accessibilityIdentifier("quickCapture.captureButton")
             }
             if !statusText.isEmpty {
                 Text(statusText)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityIdentifier("quickCapture.statusText")
             }
         }
         .padding(10)
@@ -174,9 +181,12 @@ struct MenuBarView: View {
                     .padding(10)
                     .background(.ultraThinMaterial)
                     .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .accessibilityIdentifier("todoList.empty")
             } else {
-                ForEach(store.pendingTodos.prefix(6)) { todo in
-                    todoRow(todo)
+                VStack(spacing: 6) {
+                    ForEach(store.pendingTodos.prefix(6)) { todo in
+                        todoRow(todo)
+                    }
                 }
             }
         }
@@ -192,6 +202,7 @@ struct MenuBarView: View {
                     .foregroundStyle(todo.status == .completed ? .green : .secondary)
             }
             .buttonStyle(.plain)
+            .accessibilityIdentifier("todo.completeButton.\(todo.id.uuidString)")
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 4) {
@@ -199,6 +210,7 @@ struct MenuBarView: View {
                         .font(.callout.weight(selectedTodoID == todo.id ? .semibold : .regular))
                         .lineLimit(1)
                         .strikethrough(todo.status == .completed)
+                        .accessibilityIdentifier("todo.title.\(todo.id.uuidString)")
                     if !todo.progressEntries.isEmpty {
                         progressBadge(for: todo)
                     }
@@ -207,6 +219,7 @@ struct MenuBarView: View {
                     Text(dueDate.formatted(date: .abbreviated, time: .shortened))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
+                        .accessibilityIdentifier("todo.dueDate.\(todo.id.uuidString)")
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -243,6 +256,7 @@ struct MenuBarView: View {
                 }
             }
             .help(settings.strings.progress)
+            .accessibilityIdentifier("todo.progressBadge.\(todo.id.uuidString)")
     }
 
     private func progressPopoverBinding(for todo: TodoItem) -> Binding<Bool> {
@@ -302,6 +316,7 @@ struct MenuBarView: View {
         }
         .buttonStyle(.plain)
         .animation(.snappy(duration: 0.18), value: isConfirming)
+        .accessibilityIdentifier("todo.deleteButton.\(todo.id.uuidString)")
     }
 
     private func cardBackground(isSelected: Bool = false) -> Color {
@@ -420,6 +435,7 @@ struct MenuBarView: View {
                 editorField(title: settings.strings.title) {
                     TextField(settings.strings.title, text: $draftTitle)
                         .textFieldStyle(.roundedBorder)
+                        .accessibilityIdentifier("editor.titleField")
                 }
 
                 notesEditor
@@ -432,6 +448,7 @@ struct MenuBarView: View {
                     }
                     .labelsHidden()
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityIdentifier("editor.priorityPicker")
                 }
 
                 editorField(title: settings.strings.dueDate) {
@@ -439,10 +456,12 @@ struct MenuBarView: View {
                         Toggle("", isOn: $hasDueDate)
                             .toggleStyle(.checkbox)
                             .labelsHidden()
+                            .accessibilityIdentifier("editor.dueDateToggle")
                         if hasDueDate {
                             DatePicker("", selection: $draftDueDate)
                                 .labelsHidden()
                                 .frame(maxWidth: .infinity, alignment: .leading)
+                                .accessibilityIdentifier("editor.dueDatePicker")
                         } else {
                             Text("—")
                                 .foregroundStyle(.secondary)
@@ -477,6 +496,7 @@ struct MenuBarView: View {
                 }
                 .font(.caption2)
                 .buttonStyle(.borderless)
+                .accessibilityIdentifier("editor.notesExpandButton")
             }
 
             if isEditingNotes {
@@ -488,6 +508,7 @@ struct MenuBarView: View {
                     .background(Color.primary.opacity(0.045))
                     .overlay(cardStroke)
                     .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .accessibilityIdentifier("editor.notesEditor")
             } else {
                 Button {
                     isEditingNotes = true
@@ -503,6 +524,7 @@ struct MenuBarView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier("editor.notesCollapsed")
             }
         }
     }
@@ -522,16 +544,19 @@ struct MenuBarView: View {
                         progressEditorRow(entry, for: todo)
                     }
                 }
+                .accessibilityIdentifier("editor.progressList")
             }
 
             HStack(spacing: 6) {
                 TextField(settings.strings.progressPlaceholder, text: $newProgressContent)
                     .textFieldStyle(.roundedBorder)
                     .onSubmit { addProgressToSelectedTodo() }
+                    .accessibilityIdentifier("editor.progressField")
                 Button(settings.strings.addProgress) {
                     addProgressToSelectedTodo()
                 }
                 .disabled(newProgressContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .accessibilityIdentifier("editor.progressAddButton")
             }
         }
     }
@@ -607,6 +632,7 @@ struct MenuBarView: View {
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
             }
+            .accessibilityIdentifier("completed.section")
         }
     }
 
@@ -615,10 +641,12 @@ struct MenuBarView: View {
             Text(settings.strings.pendingSummary(store.pendingTodos.count, completed: store.completedTodos.count))
                 .font(.caption2)
                 .foregroundStyle(.secondary)
+                .accessibilityIdentifier("footer.summary")
             Spacer()
             Button(settings.strings.quit) {
                 NSApplication.shared.terminate(nil)
             }
+            .accessibilityIdentifier("footer.quitButton")
         }
     }
 
